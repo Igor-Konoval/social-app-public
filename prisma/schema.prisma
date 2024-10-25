@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id          Int              @id @default(autoincrement())
+  username    String
+  displayName String           @unique
+  email       String           @unique
+  password    String?
+  bio         String?
+  avatarUrl   String?
+  providerId  String?
+  active      ActiveProperties @default(OFFLINE)
+  status      UserStatus       @default(USER)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  posts         Post[]
+  reactions     PostReaction[]
+  comments      Comment[]          @relation("CommentReceiver")
+  friends       Friend[]           @relation("UserFriends")
+  friendOf      Friend[]           @relation("UserFriendsOf")
+  Comment       Comment[]
+  savedPost     SavedPost[]
+  notifications Notification[]     @relation("ReceivedNotifications")
+  conversations ConversationUser[]
+  messages      Message[]
+}
+
+enum UserStatus {
+  USER
+  VIP
+}
+
+enum ActiveProperties {
+  ONLINE
+  OFFLINE
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  content   String
+  imageUrl  String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+
+  comments  Comment[]
+  reactions PostReaction[]
+
+  savedPost SavedPost[]
+}
+
+model PostReaction {
+  id        Int                @id @default(autoincrement())
+  reaction  ReactionProperties @default(NOTHING)
+  createdAt DateTime           @default(now())
+  user      User               @relation(fields: [userId], references: [id])
+  userId    Int
+  post      Post               @relation(fields: [postId], references: [id])
+  postId    Int
+
+  @@unique([postId, userId])
+}
+
+enum ReactionProperties {
+  HEART
+  NOTHING
+}
+
+model SavedPost {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    Int
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    Int
+
+  @@unique([userId, postId])
+}
+
+model Comment {
+  id              Int       @id @default(autoincrement())
+  content         String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  post            Post      @relation(fields: [postId], references: [id])
+  postId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  userId          Int
+  parentComment   Comment?  @relation("ParentChildComments", fields: [parentCommentId], references: [id])
+  parentCommentId Int?
+  replies         Comment[] @relation("ParentChildComments")
+  receiver        User?     @relation("CommentReceiver", fields: [receiverId], references: [id])
+  receiverId      Int?
+}
+
+model Friend {
+  id        Int          @id @default(autoincrement())
+  friend    User         @relation("UserFriends", fields: [friendId], references: [id])
+  friendId  Int
+  user      User         @relation("UserFriendsOf", fields: [userId], references: [id])
+  userId    Int
+  status    FriendStatus @default(PENDING)
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, friendId])
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+}
+
+model Notification {
+  id          Int                @id @default(autoincrement())
+  receiver    User               @relation("ReceivedNotifications", fields: [receiverId], references: [id])
+  action      Boolean            @default(false)
+  payloadData String?
+  receiverId  Int
+  content     String
+  createdAt   DateTime           @default(now())
+  status      NotificationStatus @default(UNREAD)
+}
+
+enum NotificationStatus {
+  READ
+  UNREAD
+}
+
+model Conversation {
+  id        Int                 @id @default(autoincrement())
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  variant   ConversationVariant @default(ONETOONE)
+  users     ConversationUser[]
+  messages  Message[]
+}
+
+enum ConversationVariant {
+  ONETOONE
+  CONVERSATION
+}
+
+model ConversationUser {
+  id             Int           @id @default(autoincrement())
+  user           User          @relation(fields: [userId], references: [id])
+  userId         Int
+  messageStatus  MessageStatus @default(NOTACTIVE)
+  conversation   Conversation  @relation(fields: [conversationId], references: [id])
+  conversationId Int
+
+  @@unique([userId, conversationId])
+}
+
+enum MessageStatus {
+  READ
+  UNREAD
+  NOTACTIVE
+}
+
+model Message {
+  id                Int            @id @default(autoincrement())
+  content           String
+  createdAt         DateTime       @default(now())
+  user              User           @relation(fields: [userId], references: [id])
+  messageVariant    MessageVariant @default(TEXT)
+  imageUrl          String?
+  postUsername      String?
+  postId            Int?
+  postUserAvatarUrl String?
+  userId            Int
+  conversation      Conversation   @relation(fields: [conversationId], references: [id])
+  conversationId    Int
+}
+
+enum MessageVariant {
+  TEXT
+  POST
+  IMAGE
+}
